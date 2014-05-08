@@ -35,6 +35,14 @@ void usage( boost::program_options::options_description desc)
   std::cout << desc << std::endl;
 }
 
+void mineSink(QTextStream &stream, openstudio::StringStreamLogSink &sink)
+{
+  BOOST_FOREACH(openstudio::LogMessage mesg, sink.logMessages()) {
+    stream << "," << mesg.logMessage();
+  }
+  sink.resetStringStream();
+}
+
 int main(int argc, char *argv[])
 {
   std::string inputPathString;
@@ -75,6 +83,10 @@ int main(int argc, char *argv[])
     return EXIT_FAILURE;
   }
 
+  // Try to set up a log sink
+  openstudio::StringStreamLogSink sink;
+  sink.setChannelRegex(boost::regex("openstudio\\.EpwFile"));
+
   // Open the output text file, expect one EPW file per line
   if(outputPathString.empty()) {
     outputPathString = "epwfailures.csv";
@@ -97,7 +109,6 @@ int main(int argc, char *argv[])
   }
 
   QTextStream in(&file);
-
   QString line = in.readLine();
   while (!line.isNull()) {
     openstudio::path epwPath = openstudio::toPath(line);
@@ -106,14 +117,20 @@ int main(int argc, char *argv[])
     try {
       epwFile = openstudio::EpwFile(epwPath,true);
       if(!epwFile) {
-        csv << line << ",returned" << endl;
+        csv << line << ",returned";
+        mineSink(csv,sink);
+        csv << endl;
         std::cout << "Failed to read " << line.toStdString() << std::endl;
       }
     } catch(openstudio::Exception &e) {
-      csv << line << "," << e.message() << endl;
+      csv << line << "," << e.message();
+      mineSink(csv,sink);
+      csv << endl;
       std::cout << e.message() << std::endl;
     } catch(...) {
-      csv << line << ",exception" << endl;
+      csv << line << ",exception";
+      mineSink(csv,sink);
+      csv << endl;
       std::cout << "Caught exception..." << std::endl;
     }
     line = in.readLine();
