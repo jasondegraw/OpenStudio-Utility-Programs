@@ -97,9 +97,9 @@ SET( DEPENDENCIES
 
 # Executables
 
-#add_executable(epwtowth epwtowth.cpp)
+add_executable(epwtowth epwtowth.cpp)
 
-#TARGET_LINK_LIBRARIES( epwtowth ${DEPENDENCIES} )
+TARGET_LINK_LIBRARIES( epwtowth ${DEPENDENCIES} )
 
 add_executable(epwtest epwtest.cpp)
 

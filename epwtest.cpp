@@ -75,6 +75,19 @@ int main(int argc, char *argv[])
     return EXIT_FAILURE;
   }
 
+  // Open the output text file, expect one EPW file per line
+  if(outputPathString.empty()) {
+    outputPathString = "epwfailures.csv";
+  }
+  QFile outfile(QString().fromStdString(outputPathString));
+  
+  if (!outfile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    std::cout << "Failed to open output file '" << outputPathString << "'" << std::endl;
+    return EXIT_FAILURE;
+  }
+
+  QTextStream csv(&outfile);
+
   // Open the input text file, expect one EPW file per line
   QFile file(QString().fromStdString(inputPathString));
   
@@ -84,15 +97,27 @@ int main(int argc, char *argv[])
   }
 
   QTextStream in(&file);
+
   QString line = in.readLine();
   while (!line.isNull()) {
-    openstudio::path inputPath = openstudio::toPath(line);
+    openstudio::path epwPath = openstudio::toPath(line);
+    std::cout << line.toStdString() << std::endl;
     boost::optional<openstudio::EpwFile> epwFile;
-    epwFile = openstudio::EpwFile(inputPath,true);
-    if(!epwFile) {
-      std::cout << "Failed to read " << line.toStdString() <<
+    try {
+      epwFile = openstudio::EpwFile(epwPath,true);
+      if(!epwFile) {
+        csv << line << ",returned" << endl;
+        std::cout << "Failed to read " << line.toStdString() << std::endl;
+      }
+    } catch(openstudio::Exception &e) {
+      csv << line << "," << e.message() << endl;
+      std::cout << e.message() << std::endl;
+    } catch(...) {
+      csv << line << ",exception" << endl;
+      std::cout << "Caught exception..." << std::endl;
     }
     line = in.readLine();
   }
+  outfile.close();
   return EXIT_SUCCESS;
 }
