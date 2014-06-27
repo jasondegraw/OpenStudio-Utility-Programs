@@ -98,10 +98,10 @@ SET( DEPENDENCIES
 # Executables
 
 add_executable(epwtowth epwtowth.cpp)
-
 TARGET_LINK_LIBRARIES( epwtowth ${DEPENDENCIES} )
 
 add_executable(epwtest epwtest.cpp)
-
 TARGET_LINK_LIBRARIES( epwtest ${DEPENDENCIES} )
 
+add_executable(addafnidf addafnidf.cpp)
+TARGET_LINK_LIBRARIES( addafnidf ${DEPENDENCIES} )
