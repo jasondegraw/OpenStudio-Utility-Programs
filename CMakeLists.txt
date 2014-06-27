@@ -85,10 +85,10 @@ SET( DEPENDENCIES
   ${CMAKE_THREAD_LIBS}
   ${QT_LIBS}
   openstudio_utilities
-  # openstudio_model
-  # openstudio_osversion
+  openstudio_model
+  openstudio_osversion
   # openstudio_contam
-  # openstudio_energyplus
+  openstudio_energyplus
   boost_log
 )
 

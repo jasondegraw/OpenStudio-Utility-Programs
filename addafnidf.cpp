@@ -1,5 +1,4 @@
 /**********************************************************************
- *  Copyright (c) 2013 The Pennsylvania State University
  *  Copyright (c) 2014 Jason W. DeGraw
  *  All rights reserved.
  *
@@ -22,83 +21,178 @@
 #include <osversion/VersionTranslator.hpp>
 #include <utilities/core/CommandLine.hpp>
 #include <utilities/core/Path.hpp>
-#include <utilities/sql/SqlFile.hpp>
-#include <utilities/filetypes/EpwFile.hpp>
+#include <utilities/idf/IdfObject.hpp>
+#include <model/ThermalZone.hpp>
+#include <model/Surface.hpp>
+#include <model/SubSurface.hpp>
+#include <model/AirflowNetworkSimulationControl_Impl.hpp>
 
 #include <string>
 #include <iostream>
 
+using namespace openstudio;
+using namespace openstudio::model;
+
+class AirflowNetworkBuilder : public openstudio::model::detail::SurfaceNetworkBuilder
+{
+public:
+  explicit AirflowNetworkBuilder(bool linkSubSurfaces=false);
+
+  std::vector<IdfObject> idfObjects();
+
+protected:
+  virtual bool linkExteriorSurface(const ThermalZone &zone, const Space &space, const Surface &surface);
+  virtual bool linkExteriorSubSurface(const ThermalZone &zone, const Space &space, const Surface &surface, const SubSurface &subSurface);
+  virtual bool linkInteriorSurface(const ThermalZone &zone, const Space &space, const Surface &surface, 
+    const Surface &adjacentSurface, const Space &adjacentSpace, const ThermalZone &adjacentZone);
+  virtual bool linkInteriorSubSurface(const ThermalZone &zone, const Space &space, const Surface &surface, const SubSurface &subSurface,
+    const SubSurface &adjacentSubSurface, const Surface &adjacentSurface, const Space &adjacentSpace, const ThermalZone &adjacentZone);
+
+private:
+  bool linkSurface(const std::string &elementName, const Surface &surface, std::vector<IdfObject> &surfaces);
+  std::vector<IdfObject> m_idfObjects;
+  std::vector<IdfObject> m_interiorSurfaces;
+  std::vector<IdfObject> m_exteriorSurfaces;
+  bool m_includeSubSurfaces;
+  std::map<std::string,double> m_maxArea;
+
+  REGISTER_LOGGER("openstudio.model.detail.AirflowNetworkBuilder");
+};
+
+AirflowNetworkBuilder::AirflowNetworkBuilder(bool includeSubSurfaces) : SurfaceNetworkBuilder(nullptr),m_includeSubSurfaces(includeSubSurfaces)
+{
+}
+
+std::vector<IdfObject> AirflowNetworkBuilder::idfObjects()
+{
+  std::vector<IdfObject> objects;
+  std::cout << m_maxArea["ExternalElement"] << std::endl;
+  std::cout << m_maxArea["InternalElement"] << std::endl;
+  return objects;
+}
+
+bool AirflowNetworkBuilder::linkSurface(const std::string &elementName, const Surface &surface, std::vector<IdfObject> &surfaces)
+{
+  QString idfFormat = QString("AirflowNetwork:MultiZone:Surface,%1,") + QString::fromStdString(elementName) + QString("%2,%3;");
+  boost::optional<std::string> name = surface.name();
+  if(!name) {
+    LOG(Warn, "Surface '" << openstudio::toString(surface.handle()) << "' has no name, will not be present in airflow network.");
+    return false;
+  }
+  double surfaceArea = surface.grossArea();
+  if(m_includeSubSurfaces) {
+    surfaceArea = surface.netArea();
+  }
+  std::map<std::string,double>::iterator it = m_maxArea.find(name.get());
+  if(it == m_maxArea.end()) {
+    it->second = surfaceArea;
+  } else {
+    if(it->second < surfaceArea) {
+      it->second = surfaceArea;
+    }
+  }
+  QString idfString = idfFormat.arg(openstudio::toQString(*name)).arg("").arg(1);
+  boost::optional<IdfObject> obj = openstudio::IdfObject::load(idfString.toStdString());
+  if(!obj) {
+    LOG(Error, "Failed to generate AirflowNetwork surface for " << name.get());
+    return false;
+  }
+  surfaces.push_back(obj.get());
+  return true;
+}
+
+bool AirflowNetworkBuilder::linkExteriorSurface(const ThermalZone &zone, const Space &space, const Surface &surface)
+{
+  return linkSurface("ExteriorComponent", surface, m_exteriorSurfaces);
+}
+
+bool AirflowNetworkBuilder::linkInteriorSurface(const ThermalZone &zone, const Space &space, const Surface &surface, 
+  const Surface &adjacentSurface, const Space &adjacentSpace, const ThermalZone &adjacentZone)
+{
+  return linkSurface("InteriorComponent", surface, m_interiorSurfaces);
+}
+
+bool AirflowNetworkBuilder::linkExteriorSubSurface(const ThermalZone &zone, const Space &space, const Surface &surface, const SubSurface &subSurface)
+{
+  return true;
+}
+
+bool AirflowNetworkBuilder::linkInteriorSubSurface(const ThermalZone &zone, const Space &space, const Surface &surface, const SubSurface &subSurface,
+  const SubSurface &adjacentSubSurface, const Surface &adjacentSurface, const Space &adjacentSpace, const ThermalZone &adjacentZone)
+{
+  return true;
+}
+
 void usage( boost::program_options::options_description desc)
 {
-  std::cout << "Usage: epwtowth --input-path=./path/to/input.epw" << std::endl;
-  std::cout << "   or: epwtowth input.epw" << std::endl;
+  std::cout << "Usage: addafnidf --inputPath=./path/to/input.osm" << std::endl;
+  std::cout << "   or: addafnidf input.osm" << std::endl;
   std::cout << desc << std::endl;
 }
 
 int main(int argc, char *argv[])
 {
   std::string inputPathString;
-  std::string outputPathString;
+
   boost::program_options::options_description desc("Allowed options");
-
   desc.add_options()
-    ("help,h", "print help message")
-    ("input-path,i", boost::program_options::value<std::string>(&inputPathString), "path to input EPW file")
-    ("output-path,o", boost::program_options::value<std::string>(&outputPathString), "path to output WTH file")
-    ("quiet,q", "suppress progress output");
-
+    ("help", "print help message")
+    ("inputPath", boost::program_options::value<std::string>(&inputPathString), "path to PRJ file");
   boost::program_options::positional_options_description pos;
-  pos.add("input-path", -1);
-    
+  pos.add("inputPath", -1);
+
   boost::program_options::variables_map vm;
   // The following try/catch block is necessary to avoid uncaught
   // exceptions when the program is executed with more than one
   // "positional" argument - there's got to be a better way.
   try {
-    boost::program_options::store(boost::program_options::command_line_parser(argc,
-      argv).options(desc).positional(pos).run(), vm);
+    boost::program_options::store(boost::program_options::command_line_parser(argc, argv).options(desc).positional(pos).run(),
+      vm);
     boost::program_options::notify(vm);
   }
-
   catch(std::exception&) {
     std::cout << "Execution failed: check arguments and retry."<< std::endl << std::endl;
     usage(desc);
     return EXIT_FAILURE;
   }
-  
-  if(vm.count("help")) {
+  if (vm.count("help")) {
     usage(desc);
     return EXIT_SUCCESS;
   }
-
-  if(!vm.count("input-path")) {
+  if(!vm.count("inputPath")) {
     std::cout << "No input path given." << std::endl << std::endl;
     usage(desc);
     return EXIT_FAILURE;
   }
-  
-  // Open the EPW file
+
   openstudio::path inputPath = openstudio::toPath(inputPathString);
 
-  boost::optional<openstudio::EpwFile> epwFile;
-  try {
-    epwFile = openstudio::EpwFile(inputPath,true);
-    OS_ASSERT(epwFile);
-  }
-  catch(std::exception&) {
-    std::cout << "Could not open EPW file '" << inputPathString << "'";
+  if(!boost::filesystem::exists(inputPath)) {
+    std::cout << "Input path does not exist." << std::endl;
     return EXIT_FAILURE;
   }
 
-  openstudio::path outPath = inputPath.replace_extension(openstudio::toPath("wth").string());
-  if(!outputPathString.empty()) {
-    outPath = openstudio::toPath(outputPathString);
-  }
+  openstudio::osversion::VersionTranslator vt;
+  boost::optional<openstudio::model::Model> model = vt.loadModel(inputPath);
 
-  if(!epwFile->translateToWth(outPath)) {
-    std::cout << "Translation to WTH file failed, check for errors and warnings and try again" << std::endl;
+  if(!model) {
+    std::cout << "Unable to load file '"<< inputPathString << "' as an OpenStudio model." << std::endl;
     return EXIT_FAILURE;
   }
 
+  /*
+  openstudio::afn::ForwardTranslator translator;
+
+  boost::optional<openstudio::Workspace> workspace = translator.translateModel(*model);
+
+  openstudio::path outPath = inputPath.replace_extension(openstudio::toPath("idf").string());
+
+  if(!workspace->save(outPath,true)) {
+    std::cout << "Failed to write IDF file." << std::endl;
+    return EXIT_FAILURE;
+  }
+  */
+  
   return EXIT_SUCCESS;
 }
+
