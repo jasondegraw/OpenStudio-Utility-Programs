@@ -26,6 +26,7 @@
 #include <model/Surface.hpp>
 #include <model/SubSurface.hpp>
 #include <model/AirflowNetworkSimulationControl_Impl.hpp>
+#include <energyplus/ForwardTranslator.hpp>
 
 #include <string>
 #include <iostream>
@@ -151,7 +152,7 @@ int main(int argc, char *argv[])
     boost::program_options::notify(vm);
   }
   catch(std::exception&) {
-    std::cout << "Execution failed: check arguments and retry."<< std::endl << std::endl;
+    std::cerr << "Execution failed: check arguments and retry."<< std::endl << std::endl;
     usage(desc);
     return EXIT_FAILURE;
   }
@@ -160,7 +161,7 @@ int main(int argc, char *argv[])
     return EXIT_SUCCESS;
   }
   if(!vm.count("inputPath")) {
-    std::cout << "No input path given." << std::endl << std::endl;
+    std::cerr << "No input path given." << std::endl << std::endl;
     usage(desc);
     return EXIT_FAILURE;
   }
@@ -168,7 +169,7 @@ int main(int argc, char *argv[])
   openstudio::path inputPath = openstudio::toPath(inputPathString);
 
   if(!boost::filesystem::exists(inputPath)) {
-    std::cout << "Input path does not exist." << std::endl;
+    std::cerr << "Input path does not exist." << std::endl;
     return EXIT_FAILURE;
   }
 
@@ -176,22 +177,29 @@ int main(int argc, char *argv[])
   boost::optional<openstudio::model::Model> model = vt.loadModel(inputPath);
 
   if(!model) {
-    std::cout << "Unable to load file '"<< inputPathString << "' as an OpenStudio model." << std::endl;
+    std::cerr << "Unable to load file '"<< inputPathString << "' as an OpenStudio model." << std::endl;
     return EXIT_FAILURE;
   }
 
-  /*
-  openstudio::afn::ForwardTranslator translator;
+  // Get an E+ workspace
+  openstudio::energyplus::ForwardTranslator translator;
+  openstudio::Workspace workspace = translator.translateModel(model.get(),nullptr);
 
-  boost::optional<openstudio::Workspace> workspace = translator.translateModel(*model);
+  // Add AFN objects
+  AirflowNetworkBuilder builder;
+  builder.build(model.get());
+  std::vector<openstudio::IdfObject> idfObjects = builder.idfObjects();
+  if(!idfObjects.size()) {
+    std::cerr << "No AirflowNetwork objects were added." << std::cerr;
+    return EXIT_FAILURE;
+  }
 
   openstudio::path outPath = inputPath.replace_extension(openstudio::toPath("idf").string());
 
-  if(!workspace->save(outPath,true)) {
-    std::cout << "Failed to write IDF file." << std::endl;
+  if(!workspace.save(outPath,true)) {
+    std::cerr << "Failed to write IDF file." << std::endl;
     return EXIT_FAILURE;
   }
-  */
   
   return EXIT_SUCCESS;
 }
