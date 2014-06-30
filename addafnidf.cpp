@@ -23,6 +23,7 @@
 #include <utilities/core/Path.hpp>
 #include <utilities/idf/IdfObject.hpp>
 #include <model/ThermalZone.hpp>
+#include <model/ThermalZone_Impl.hpp>
 #include <model/Surface.hpp>
 #include <model/SubSurface.hpp>
 #include <model/AirflowNetworkSimulationControl_Impl.hpp>
@@ -44,6 +45,8 @@ public:
 
   std::vector<IdfObject> idfObjects();
 
+   virtual bool build(model::Model & model);
+
 protected:
   virtual bool linkExteriorSurface(const ThermalZone &zone, const Space &space, const Surface &surface);
   virtual bool linkExteriorSubSurface(const ThermalZone &zone, const Space &space, const Surface &surface, const SubSurface &subSurface);
@@ -54,8 +57,8 @@ protected:
 
 private:
   bool linkSurface(const std::string &elementName, const Surface &surface, std::vector<IdfObject> &surfaces);
-  std::vector<IdfObject> m_idfObjects;
-  std::vector<IdfObject> m_airflowElements;
+  //std::vector<IdfObject> m_idfObjects;
+  std::vector<IdfObject> m_airflowObjects;
   std::vector<IdfObject> m_interiorSurfaces;
   std::vector<IdfObject> m_exteriorSurfaces;
   bool m_includeSubSurfaces;
@@ -89,7 +92,7 @@ std::vector<IdfObject> AirflowNetworkBuilder::idfObjects()
     << "20.0"  // !- Reference Temperature for Crack Data {C}
     << "101325"  // !- Reference Barometric Pressure for Crack Data {Pa}
     << "0.0"; // !- Reference Humidity Ratio for Crack Data {kgWater/kgDryAir}
-  m_airflowElements.push_back(openstudio::IdfObject::load((idfStrings.join(",")+";").toStdString()).get());
+  m_airflowObjects.push_back(openstudio::IdfObject::load((idfStrings.join(",")+";").toStdString()).get());
 
   // This is the "two elements to rule them all" approach
   // Generate exterior leakage element
@@ -99,7 +102,7 @@ std::vector<IdfObject> AirflowNetworkBuilder::idfObjects()
     << QString().sprintf("%g",m_maxArea["ExteriorComponent"]*4.99082e-4) // !- Air Mass Flow Coefficient at Reference Conditions {kg/s}
     << "0.65"  // !- Air Mass Flow Exponent {dimensionless}
     << "ReferenceCrackConditions"; // !- Reference Crack Conditions
-  m_airflowElements.push_back(openstudio::IdfObject::load((idfStrings.join(",")+";").toStdString()).get());
+  m_airflowObjects.push_back(openstudio::IdfObject::load((idfStrings.join(",")+";").toStdString()).get());
 
   // Generate interior leakage element
   idfStrings.clear();
@@ -108,32 +111,65 @@ std::vector<IdfObject> AirflowNetworkBuilder::idfObjects()
     << QString().sprintf("%g",m_maxArea["InteriorComponent"]*2.0*4.99082e-4) // !- Air Mass Flow Coefficient at Reference Conditions {kg/s}
     << "0.65"  // !- Air Mass Flow Exponent {dimensionless}
     << "ReferenceCrackConditions"; // !- Reference Crack Conditions
-  m_airflowElements.push_back(openstudio::IdfObject::load((idfStrings.join(",")+";").toStdString()).get());
+  m_airflowObjects.push_back(openstudio::IdfObject::load((idfStrings.join(",")+";").toStdString()).get());
 
-  std::vector<IdfObject> objects = m_airflowElements;
+  std::vector<IdfObject> objects = m_airflowObjects;
 
-  /*
   // Set the multipliers on all the elements appropriately
+  double maxArea = m_maxArea["ExteriorComponent"];
   BOOST_FOREACH(IdfObject obj, m_exteriorSurfaces) {
     boost::optional<std::string> optName = obj.getString(AirflowNetwork_MultiZone_SurfaceFields::SurfaceName,false);
-    if(optName) {
-      // boost::optional<double> optArea = obj.getDouble(AirflowNetwork_MultiZone_SurfaceFields::Window_DoorOpeningFactororCrackFactor,false);
-      if(obj.setDouble(AirflowNetwork_MultiZone_SurfaceFields::Window_DoorOpeningFactororCrackFactor,m_surfaceArea[optName.get()]/m_maxArea["ExteriorComponent"])) {
+    if(optName && m_surfaceArea[optName.get()]) {
+      if(obj.setDouble(AirflowNetwork_MultiZone_SurfaceFields::Window_DoorOpeningFactororCrackFactor,m_surfaceArea[optName.get()]/maxArea)) {
         objects.push_back(obj);
       }
     }
-  
   }
 
+  maxArea = m_maxArea["InteriorComponent"];
   BOOST_FOREACH(IdfObject obj, m_interiorSurfaces) {
-  
+    boost::optional<std::string> optName = obj.getString(AirflowNetwork_MultiZone_SurfaceFields::SurfaceName,false);
+    if(optName && m_surfaceArea[optName.get()]) {
+      if(obj.setDouble(AirflowNetwork_MultiZone_SurfaceFields::Window_DoorOpeningFactororCrackFactor,m_surfaceArea[optName.get()]/maxArea)) {
+        objects.push_back(obj);
+      }
+    }
   }
-  */
   
   objects.insert(objects.end(), m_exteriorSurfaces.begin(), m_exteriorSurfaces.end());
   objects.insert(objects.end(), m_interiorSurfaces.begin(), m_interiorSurfaces.end());
 
   return objects;
+}
+
+bool AirflowNetworkBuilder::build(model::Model & model)
+{
+  QStringList idfStrings;
+  BOOST_FOREACH(openstudio::model::ThermalZone thermalZone, model.getConcreteModelObjects<openstudio::model::ThermalZone>()) {
+    boost::optional<std::string> name = thermalZone.name();
+    if(!name) {
+      LOG(Error, "Thermal zone '" << thermalZone.handle() << "' has no name, translation aborted");
+      return false;
+    }
+    idfStrings.clear();
+    idfStrings << "AirflowNetwork:Multizone:Zone"
+      << openstudio::toQString(*name) // !- Name of Associated Thermal Zone
+      << "NoVent" // !- Ventilation Control Mode
+      << ""  // !- Vent Temperature Schedule Name
+      << ""  // !- Limit Value on Multiplier for Modulating Venting Open Factor {dimensionless}
+      << ""  // !- Lower Value on Inside/Outside Temperature Difference for
+      // !- Modulating the Venting Open Factor {deltaC}
+      << ""  // !- Upper Value on Inside/Outside Temperature Difference for
+      // !- Modulating the Venting Open Factor {deltaC}
+      << ""  // !- Lower Value on Inside/Outside Enthalpy Difference for Modulating
+      // !- the Venting Open Factor {J/kg}
+      << ""  // !- Upper Value on Inside/Outside Enthalpy Difference for Modulating
+      // !- the Venting Open Factor {J/kg}
+      << ""; // !- Venting Availability Schedule Name
+    m_airflowObjects.push_back(openstudio::IdfObject::load((idfStrings.join(",")+";").toStdString()).get());
+  }
+
+  return SurfaceNetworkBuilder::build(model);
 }
 
 bool AirflowNetworkBuilder::linkSurface(const std::string &elementName, const Surface &surface, std::vector<IdfObject> &surfaces)
