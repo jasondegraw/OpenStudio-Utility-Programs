@@ -27,6 +27,9 @@
 #include <model/SubSurface.hpp>
 #include <model/AirflowNetworkSimulationControl_Impl.hpp>
 #include <energyplus/ForwardTranslator.hpp>
+//#include <utilities/idd/AirflowNetwork_SimulationControl_FieldEnums.hxx>
+#include <utilities/idd/AirflowNetwork_MultiZone_Surface_FieldEnums.hxx>
+//#include <utilities/idd/IddEnums.hxx>
 
 #include <string>
 #include <iostream>
@@ -57,6 +60,7 @@ private:
   std::vector<IdfObject> m_exteriorSurfaces;
   bool m_includeSubSurfaces;
   std::map<std::string,double> m_maxArea;
+  std::map<std::string,double> m_surfaceArea;
 
   REGISTER_LOGGER("openstudio.model.detail.AirflowNetworkBuilder");
 };
@@ -67,13 +71,15 @@ AirflowNetworkBuilder::AirflowNetworkBuilder(bool includeSubSurfaces) : SurfaceN
 
 std::vector<IdfObject> AirflowNetworkBuilder::idfObjects()
 {
-  std::cout << "Maximum exterior area: " << m_maxArea["Exterior"] << std::endl;
-  std::cout << "Maximum interior area: " << m_maxArea["Interior"] << std::endl;
+  std::cout << "Maximum exterior area: " << m_maxArea["ExteriorComponent"] << std::endl;
+  std::cout << "Maximum interior area: " << m_maxArea["InteriorComponent"] << std::endl;
 
+  /*
   double maxArea = m_maxArea["Exterior"];
   if(m_maxArea["Interior"] > maxArea) {
     maxArea = m_maxArea["Interior"];
   }
+  */
 
   QStringList idfStrings;
 
@@ -90,7 +96,7 @@ std::vector<IdfObject> AirflowNetworkBuilder::idfObjects()
   idfStrings.clear();
   idfStrings << "AirflowNetwork:MultiZone:Surface:Crack"
     << "ExteriorComponent"  // !- Name of Surface Crack Component
-    << QString().sprintf("%g",m_maxArea["Exterior"]*4.99082e-4) // !- Air Mass Flow Coefficient at Reference Conditions {kg/s}
+    << QString().sprintf("%g",m_maxArea["ExteriorComponent"]*4.99082e-4) // !- Air Mass Flow Coefficient at Reference Conditions {kg/s}
     << "0.65"  // !- Air Mass Flow Exponent {dimensionless}
     << "ReferenceCrackConditions"; // !- Reference Crack Conditions
   m_airflowElements.push_back(openstudio::IdfObject::load((idfStrings.join(",")+";").toStdString()).get());
@@ -99,21 +105,31 @@ std::vector<IdfObject> AirflowNetworkBuilder::idfObjects()
   idfStrings.clear();
   idfStrings << "AirflowNetwork:MultiZone:Surface:Crack"
     << "InteriorComponent"  // !- Name of Surface Crack Component
-    << QString().sprintf("%g",m_maxArea["Interior"]*2.0*4.99082e-4) // !- Air Mass Flow Coefficient at Reference Conditions {kg/s}
+    << QString().sprintf("%g",m_maxArea["InteriorComponent"]*2.0*4.99082e-4) // !- Air Mass Flow Coefficient at Reference Conditions {kg/s}
     << "0.65"  // !- Air Mass Flow Exponent {dimensionless}
     << "ReferenceCrackConditions"; // !- Reference Crack Conditions
   m_airflowElements.push_back(openstudio::IdfObject::load((idfStrings.join(",")+";").toStdString()).get());
 
+  std::vector<IdfObject> objects = m_airflowElements;
+
+  /*
   // Set the multipliers on all the elements appropriately
   BOOST_FOREACH(IdfObject obj, m_exteriorSurfaces) {
+    boost::optional<std::string> optName = obj.getString(AirflowNetwork_MultiZone_SurfaceFields::SurfaceName,false);
+    if(optName) {
+      // boost::optional<double> optArea = obj.getDouble(AirflowNetwork_MultiZone_SurfaceFields::Window_DoorOpeningFactororCrackFactor,false);
+      if(obj.setDouble(AirflowNetwork_MultiZone_SurfaceFields::Window_DoorOpeningFactororCrackFactor,m_surfaceArea[optName.get()]/m_maxArea["ExteriorComponent"])) {
+        objects.push_back(obj);
+      }
+    }
   
   }
 
   BOOST_FOREACH(IdfObject obj, m_interiorSurfaces) {
   
   }
-
-  std::vector<IdfObject> objects = m_airflowElements;
+  */
+  
   objects.insert(objects.end(), m_exteriorSurfaces.begin(), m_exteriorSurfaces.end());
   objects.insert(objects.end(), m_interiorSurfaces.begin(), m_interiorSurfaces.end());
 
@@ -122,7 +138,7 @@ std::vector<IdfObject> AirflowNetworkBuilder::idfObjects()
 
 bool AirflowNetworkBuilder::linkSurface(const std::string &elementName, const Surface &surface, std::vector<IdfObject> &surfaces)
 {
-  QString idfFormat = QString("AirflowNetwork:MultiZone:Surface,%1,") + QString::fromStdString(elementName) + QString("%2,%3;");
+  QString idfFormat = QString("AirflowNetwork:MultiZone:Surface,%1,") + QString::fromStdString(elementName) + QString(",%2,%3;");
   boost::optional<std::string> name = surface.name();
   if(!name) {
     LOG(Warn, "Surface '" << openstudio::toString(surface.handle()) << "' has no name, will not be present in airflow network.");
@@ -143,8 +159,8 @@ bool AirflowNetworkBuilder::linkSurface(const std::string &elementName, const Su
     }
   }
   
-  // This is probably a bad way to store the surface area, should directly create the IdfObject
-  QString idfString = idfFormat.arg(openstudio::toQString(*name)).arg("").arg(surfaceArea);
+  m_surfaceArea[name.get()] = surfaceArea;
+  QString idfString = idfFormat.arg(openstudio::toQString(name.get())).arg("").arg(1);
   boost::optional<IdfObject> obj = openstudio::IdfObject::load(idfString.toStdString());
   if(!obj) {
     LOG(Error, "Failed to generate AirflowNetwork surface for " << name.get());
@@ -156,13 +172,13 @@ bool AirflowNetworkBuilder::linkSurface(const std::string &elementName, const Su
 
 bool AirflowNetworkBuilder::linkExteriorSurface(const ThermalZone &zone, const Space &space, const Surface &surface)
 {
-  return linkSurface("Exterior", surface, m_exteriorSurfaces);
+  return linkSurface("ExteriorComponent", surface, m_exteriorSurfaces);
 }
 
 bool AirflowNetworkBuilder::linkInteriorSurface(const ThermalZone &zone, const Space &space, const Surface &surface, 
   const Surface &adjacentSurface, const Space &adjacentSpace, const ThermalZone &adjacentZone)
 {
-  return linkSurface("Interior", surface, m_interiorSurfaces);
+  return linkSurface("InteriorComponent", surface, m_interiorSurfaces);
 }
 
 bool AirflowNetworkBuilder::linkExteriorSubSurface(const ThermalZone &zone, const Space &space, const Surface &surface, const SubSurface &subSurface)
@@ -242,19 +258,24 @@ int main(int argc, char *argv[])
   builder.build(model.get());
   std::vector<openstudio::IdfObject> idfObjects = builder.idfObjects();
   if(!idfObjects.size()) {
-    std::cerr << "No AirflowNetwork objects were added to model, no output IDF written." << std::endl;
+    std::cerr << "No AirflowNetwork objects were added to model, no IDF output written." << std::endl;
     return EXIT_FAILURE;
   }
 
   std::cout << "Adding " << idfObjects.size() << " IDF objects to model." << std::endl;
+
+ std::vector<openstudio::WorkspaceObject> workObjects = workspace.addObjects(idfObjects);
+ if(workObjects.empty()) {
+   std::cerr << "Failed to add IDF objects to model, no IDF output written." << std::endl;
+   return EXIT_FAILURE;
+ }
   
-  /*
   openstudio::path outPath = inputPath.replace_extension(openstudio::toPath("idf").string());
 
   if(!workspace.save(outPath,true)) {
     std::cerr << "Failed to write IDF file." << std::endl;
     return EXIT_FAILURE;
-  }*/
+  }
   
   return EXIT_SUCCESS;
 }
