@@ -136,8 +136,8 @@ std::vector<IdfObject> AirflowNetworkBuilder::idfObjects()
     }
   }
   
-  objects.insert(objects.end(), m_exteriorSurfaces.begin(), m_exteriorSurfaces.end());
-  objects.insert(objects.end(), m_interiorSurfaces.begin(), m_interiorSurfaces.end());
+  //objects.insert(objects.end(), m_exteriorSurfaces.begin(), m_exteriorSurfaces.end());
+  //objects.insert(objects.end(), m_interiorSurfaces.begin(), m_interiorSurfaces.end());
 
   return objects;
 }
@@ -297,6 +297,24 @@ int main(int argc, char *argv[])
     std::cerr << "No AirflowNetwork objects were added to model, no IDF output written." << std::endl;
     return EXIT_FAILURE;
   }
+
+  // Create a simulation control object
+  QStringList idfStrings;
+  idfStrings << "AirflowNetwork:SimulationControl"
+    << "Automatic_AirflowNetwork"  // !- Name
+    << "MultiZoneWithoutDistribution"  // !- AirflowNetwork Control
+    << "SurfaceAverageCalculation"  // !- Wind Pressure Coefficient Type
+    << ""  // !- AirflowNetwork Wind Pressure Coefficient Array Name
+    << "OpeningHeight"  // !- Height Selection for Local Wind Speed Calculation
+    << "LowRise"  // !- Building Type
+    << "500"  // !- Maximum Number of Iterations {dimensionless}
+    << "ZeroNodePressures" // !- Initialization Type
+    << "1.0E-05"  // !- Relative Airflow Convergence Tolerance {dimensionless}
+    << "1.0E-06"  // !- Absolute Airflow Convergence Tolerance {kg/s}
+    << "-0.5"  // !- Convergence Acceleration Limit {dimensionless}
+    << "0.0"  // !- Azimuth Angle of Long Axis of Building {deg}
+    << "1.0";  // !- Ratio of Building Width Along Short Axis to Width Along Long Axis
+  idfObjects.insert(idfObjects.begin(),openstudio::IdfObject::load((idfStrings.join(",")+";").toStdString()).get());
 
   std::cout << "Adding " << idfObjects.size() << " IDF objects to model." << std::endl;
 
