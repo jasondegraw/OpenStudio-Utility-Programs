@@ -87,7 +87,6 @@ SET( DEPENDENCIES
   openstudio_utilities
   openstudio_model
   openstudio_osversion
-  # openstudio_contam
   openstudio_energyplus
   boost_log
 )
@@ -98,10 +97,13 @@ SET( DEPENDENCIES
 # Executables
 
 add_executable(epwtowth epwtowth.cpp)
-TARGET_LINK_LIBRARIES( epwtowth ${DEPENDENCIES} )
+TARGET_LINK_LIBRARIES(epwtowth ${DEPENDENCIES})
 
 add_executable(epwtest epwtest.cpp)
-TARGET_LINK_LIBRARIES( epwtest ${DEPENDENCIES} )
+TARGET_LINK_LIBRARIES(epwtest ${DEPENDENCIES})
 
 add_executable(addafnidf addafnidf.cpp)
-TARGET_LINK_LIBRARIES( addafnidf ${DEPENDENCIES} )
+TARGET_LINK_LIBRARIES(addafnidf ${DEPENDENCIES})
+
+add_executable(builddemomodel builddemomodel.cpp)
+TARGET_LINK_LIBRARIES(builddemomodel ${DEPENDENCIES})
