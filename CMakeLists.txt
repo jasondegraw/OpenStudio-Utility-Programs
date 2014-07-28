@@ -1,12 +1,12 @@
-CMAKE_MINIMUM_REQUIRED( VERSION 2.8 )
+CMAKE_MINIMUM_REQUIRED(VERSION 2.8.11)
 
 PROJECT( UtilityPrograms )
 
 # High level project configuration
 
-SET( CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Products" )
-SET( CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Products" )
-SET( CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Products" )
+set( CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Products" )
+set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Products" )
+set( CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Products" )
 
 # Build with Multiple Processes
 
@@ -19,7 +19,7 @@ ENDIF()
 
 ## OpenStudio
 
-SET( OPENSTUDIO_BUILD_DIR "" CACHE PATH "Build or install directory for OpenStudio build to link against")
+set(OPENSTUDIO_BUILD_DIR "" CACHE PATH "Build or install directory for OpenStudio build to link against")
 
 INCLUDE ( "${OPENSTUDIO_BUILD_DIR}/OpenStudioCore-prefix/src/OpenStudioCore-build/OpenStudioCoreConfig.cmake" )
 
@@ -50,49 +50,55 @@ IF (WIN32)
   set(Boost_USE_STATIC_LIBS ON)  
 ENDIF (WIN32)
 
-SET( Boost_ADDITIONAL_VERSIONS "1.40" )
-FIND_PACKAGE( Boost 1.40.0 REQUIRED COMPONENTS filesystem regex program_options system thread date_time serialization)
+find_package(Boost 1.55.0 COMPONENTS filesystem regex program_options system thread chrono date_time log QUIET)
+
 INCLUDE_DIRECTORIES( ${Boost_INCLUDE_DIR} )
-MARK_AS_ADVANCED( Boost_LIB_DIAGNOSTIC_DEFINITIONS )
-ADD_DEFINITIONS( -DBOOST_FILESYSTEM_VERSION=2 )
-
-## Boost-log
-ADD_DEFINITIONS( -DBOOST_LOG_NO_LIB ) # disable autolinking
-ADD_DEFINITIONS( -DBOOST_LOG_SETUP_NO_LIB ) # disable autolinking
-
-SET(BoostLog_DIR "${OPENSTUDIO_BUILD_DIR}/BoostLog-prefix/src/BoostLog-build")
-find_package(BoostLog REQUIRED)
-INCLUDE_DIRECTORIES( ${BoostLog_INCLUDE_DIRS} )
-LINK_DIRECTORIES( ${BoostLog_LIBRARY_DIRS} )
 
 ## Qt
-FIND_PACKAGE (Qt4 4.6.0 COMPONENTS QtCore REQUIRED)
-INCLUDE_DIRECTORIES( ${QT_INCLUDE_DIR} )
+find_package(Qt5Widgets) #Qt5Core, Qt5Gui, Qt5Widgets
+find_package(Qt5Sql) #Qt5Core, Qt5Sql
+find_package(Qt5Network) #Qt5Core, Qt5Network
+find_package(Qt5Xml) #Qt5Core, Qt5Xml
+find_package(Qt5WebKit) #Qt5Core, Qt5Gui, Qt5Network, Qt5WebKit
+find_package(Qt5WebKitWidgets) #Qt5Core, Qt5Gui, Qt5Multimedia, Qt5MultimediaWidgets, Qt5Network, Qt5OpenGL, Qt5Positioning, Qt5PrintSupport, Qt5Qml, Qt5Quick, Qt5Sensors, Qt5WebKit, Qt5WebKitWidgets, Qt5Widgets
+#find_package(Qt5WinExtras) #Qt5Core, Qt5Gui, Qt5WinExtras
+find_package(Qt5Concurrent) #Qt5Core, Qt5Concurrent
 
-# QT_USE_FILE is a variable defined by FIND_PACKAGE( Qt4 ) that contains a path to
-# a CMake script that sets up this directory for building with Qt4
-INCLUDE( ${QT_USE_FILE} )
-MARK_AS_ADVANCED( QT_QMAKE_EXECUTABLE QT_QTMOTIF_INCLUDE_DIR QT_QTMOTIF_LIBRARY_DEBUG QT_QTMOTIF_LIBRARY_RELEASE )
-
-# QT_USE_FILE is a variable defined by FIND_PACKAGE( Qt4 ) that contains a path to
-# a CMake script that sets up this directory for building with Qt4
-INCLUDE( ${QT_USE_FILE} )
+mark_as_advanced(
+  Qt5Concurrent_DIR
+  Qt5Core_DIR
+  Qt5Gui_DIR
+  Qt5Gui_EGL_LIBRARY
+  Qt5Location_DIR
+  Qt5Multimedia_DIR
+  Qt5MultimediaWidgets_DIR
+  Qt5Network_DIR
+  Qt5OpenGL_DIR
+  Qt5Positioning_DIR
+  Qt5PrintSupport_DIR
+  Qt5Qml_DIR
+  Qt5Quick_DIR
+  Qt5Sensors_DIR
+  Qt5Sql_DIR
+  Qt5WebKit_DIR
+  Qt5WebKitWidgets_DIR
+  Qt5Widgets_DIR
+  #Qt5WinExtras_DIR
+  Qt5Xml_DIR
+)
 
 # Dependencies
 
 SET( DEPENDENCIES
   ${Boost_LIBRARIES}
-  ${CMAKE_THREAD_LIBS}
-  ${QT_LIBS}
+  #${CMAKE_THREAD_LIBS}
+  #  ${QT_LIBS}
   openstudio_utilities
   openstudio_model
   openstudio_osversion
   openstudio_energyplus
-  boost_log
+  # boost_log
 )
-
-# generate rules for building source files from the resources
-#qt4_add_resources( resources.qrc )
 
 # Executables
 
@@ -102,8 +108,8 @@ TARGET_LINK_LIBRARIES(epwtowth ${DEPENDENCIES})
 add_executable(epwtest epwtest.cpp)
 TARGET_LINK_LIBRARIES(epwtest ${DEPENDENCIES})
 
-add_executable(addafnidf addafnidf.cpp)
-TARGET_LINK_LIBRARIES(addafnidf ${DEPENDENCIES})
+#add_executable(addafnidf addafnidf.cpp)
+#TARGET_LINK_LIBRARIES(addafnidf ${DEPENDENCIES})
 
 add_executable(builddemomodel builddemomodel.cpp)
 TARGET_LINK_LIBRARIES(builddemomodel ${DEPENDENCIES})

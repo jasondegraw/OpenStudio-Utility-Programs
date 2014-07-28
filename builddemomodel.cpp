@@ -1243,7 +1243,7 @@ void exampleModel(Model& model)
 
   // add some example variables
   int i = 1;
-  BOOST_FOREACH(const std::string& variableName, thermalZone.outputVariableNames()){
+  for(std::string variableName : thermalZone.outputVariableNames()){
     OutputVariable(variableName, model);
     if (++i > 2) {
       break;
@@ -1252,8 +1252,8 @@ void exampleModel(Model& model)
 
   // add some example variables
   i = 1;
-  BOOST_FOREACH(const Surface& surface, model.getConcreteModelObjects<Surface>()){
-    BOOST_FOREACH(const std::string& variableName, surface.outputVariableNames()){
+  for(Surface surface : model.getConcreteModelObjects<Surface>()){
+    for (std::string variableName : surface.outputVariableNames()){
       OutputVariable(variableName, model);
       if (++i > 2) {
         break;
@@ -1379,7 +1379,7 @@ void demoModel(Model& model, bool doors=false, bool windows=false)
 
   // find thermostat
   boost::optional<openstudio::model::ThermostatSetpointDualSetpoint> thermostat;
-  BOOST_FOREACH(openstudio::model::ThermostatSetpointDualSetpoint t,
+  for(openstudio::model::ThermostatSetpointDualSetpoint t : 
     model.getModelObjects<openstudio::model::ThermostatSetpointDualSetpoint>()) {
     thermostat = t;
     break;
@@ -1423,7 +1423,7 @@ void demoModel(Model& model, bool doors=false, bool windows=false)
   airLoop.addBranchForZone(office2Zone);
 
   boost::optional<openstudio::model::SetpointManagerSingleZoneReheat> setpointManager;
-  BOOST_FOREACH(openstudio::model::SetpointManagerSingleZoneReheat t, 
+  for(openstudio::model::SetpointManagerSingleZoneReheat t : 
     model.getModelObjects<openstudio::model::SetpointManagerSingleZoneReheat>())
   {
     setpointManager = t;

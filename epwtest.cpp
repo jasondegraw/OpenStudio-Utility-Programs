@@ -37,7 +37,7 @@ void usage( boost::program_options::options_description desc)
 
 void mineSink(QTextStream &stream, openstudio::StringStreamLogSink &sink)
 {
-  BOOST_FOREACH(openstudio::LogMessage mesg, sink.logMessages()) {
+  for(openstudio::LogMessage mesg : sink.logMessages()) {
     stream << "," << mesg.logMessage();
   }
   sink.resetStringStream();
